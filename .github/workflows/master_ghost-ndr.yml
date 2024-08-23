@@ -1,57 +1,66 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy ASP app to Azure Web App - Ghost-ndr
+name: Build and deploy Node.js app to Azure Web App
 
 on:
   push:
     branches:
-      - master
+      - main
   workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: mbspro-be-app-01   # set this to your application's name
+  NODE_VERSION: '18.x'                # set this to the node version to use
+  AZURE_WEBAPP_PACKAGE_PATH: '.'      # set this to the path to your web app project, defaults to the repository root
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v2
 
-      - name: Setup MSBuild path
-        uses: microsoft/setup-msbuild@v1.0.2
+      - name: Set up Node.js version
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup NuGet
-        uses: NuGet/setup-nuget@v1.0.5
-
-      - name: Restore NuGet packages
-        run: nuget restore
-
-      - name: Publish to folder
-        run: msbuild /nologo /verbosity:m /t:Build /t:pipelinePreDeployCopyAllFilesToOneFolder /p:_PackageTempDir="\published\"
+      - name: npm install, build
+        run: |
+          npm install
+          npm run build --if-present
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v2
         with:
-          name: ASP-app
-          path: '/published/**'
+          name: node-app
+          path: .
 
   deploy:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     needs: build
-    environment:
-      name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+  
 
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v2
         with:
-          name: ASP-app
+          name: node-app
+      - uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "ff09c246-c775-49e9-a978-3569c31c39a7",
+              "clientSecret":  "HwS8Q~whsmU14OL04aFle48RGL62MWSOmMXFKb7l",
+              "subscriptionId": "b6ea4878-8890-4ed9-89fb-205c823966d3",
+              "tenantId": "79249549-4168-447a-9329-da3c76b5b824"
+            }
 
-      - name: Deploy to Azure Web App
+      - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'Ghost-ndr'
-          slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_9402AFEF496E4D70900F3C73EB9EB6FF }}
-          package: .
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+      - name: logout
+        run: |
+          az logout
